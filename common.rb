@@ -63,21 +63,45 @@ def exec_shell(command, error_message, options = {})
   return result
 end
 
-def fix_copyrights(dir_project, dir_headers)
+def list_files(dir, options = {})
+
+  files = []
+
+  ignored_files = options[:ignored_files] || []
+  types = options[:types]
+  list_directories = options[:list_directories]
+
+  Dir["#{dir}/*"].each {|file|
+
+    next if ignored_files.include?(File.basename file)
+
+    if File.directory? file
+      files.push file if list_directories
+      files.push *(list_files file, options)
+    else
+      next if types && !types.include?(File.extname file)
+      files.push file
+    end
+  }
+
+  return files
+
+end
+
+def fix_copyrights(dir_project, dir_headers, options = {})
 
   print_header 'Fixing copyright...'
-
-  modified_files = []
 
   file_header = resolve_path "#{dir_headers}/copyright.txt"
   copyright_header = File.read file_header
 
-  Dir["#{dir_project}/**/*.cs"].each do |file|
+  files = list_files dir_project, options
 
-    next if File.basename(file) == 'Plist.cs' # FIXME: make a better filter for ignored files
+  modified_files = []
 
+  files.each {|file|
     modified_files.push file if fix_copyright(file, copyright_header)
-  end
+  }
 
   return modified_files
 

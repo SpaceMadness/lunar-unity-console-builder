@@ -39,7 +39,7 @@ task :resolve_version => [:init] do
     file_version = resolve_path "#{dir_project}/Scripts/Constants.cs"
     source = File.read file_version
 
-    source =~ /VERSION\s+=\s+"(\d+\.\d+.\d+\w?)"/
+    source =~ /Version\s+=\s+"(\d+\.\d+.\d+\w?)"/
     return not_nil $1
 
   end
@@ -56,7 +56,12 @@ task :fix_projects => [:init, :resolve_version] do
     files = []
 
     # copyrights
-    files = files.concat fix_copyrights(resolve_path($dir_repo_project_plugin), $dir_tools_copyrighter)
+    files = files.concat fix_copyrights(
+                             resolve_path($dir_repo),
+                             $dir_tools_copyrighter,
+                             :types => ['.cs', '.h', '.m', '.mm', '.c', '.cpp', '.java'],
+                             :ignored_files => [ 'Plist.cs', 'XCodeEditor-for-Unity', 'SimpleJSON.cs' ]
+                         )
 
     # push changes
     Git.commit_and_push $dir_repo, $git_branch, files if files.length > 0
