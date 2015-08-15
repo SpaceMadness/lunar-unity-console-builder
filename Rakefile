@@ -1,3 +1,5 @@
+require 'fileutils'
+
 require_relative 'common'
 require_relative 'git'
 require_relative 'credentials'
@@ -8,7 +10,9 @@ task :init do
   $git_branch = 'develop'
 
   $dir_temp = File.expand_path 'temp'
+  $dir_packages = "#{$dir_temp}/packages"
   $dir_repo = "#{$dir_temp}/repo"
+
   $dir_repo_project = "#{$dir_repo}/Project"
   $dir_repo_project_plugin = "#{$dir_repo_project}/Assets/LunarConsole"
 
@@ -71,8 +75,8 @@ task :fix_projects => [:init, :resolve_version] do
 end
 
 
-desc 'Release package'
-task :release_package => [:clean, :clone_repo, :fix_projects] do
+desc 'Build package'
+task :build_package => [:clean, :clone_repo, :fix_projects] do
 
   # call internal builder
   dir_builder = resolve_path "#{$dir_repo}/Builder"
@@ -83,6 +87,17 @@ task :release_package => [:clean, :clone_repo, :fix_projects] do
   end
 
   file_package = resolve_path Dir["#{$dir_repo}/Builder/temp/packages/lunar-console-*.unitypackage"].first
+  FileUtils.rm_rf $dir_packages
+  FileUtils.makedirs $dir_packages
+
+  FileUtils.cp file_package, "#{$dir_packages}/"
+
+end
+
+desc 'Release package'
+task :release_package => [:build_package] do
+
+  file_package = resolve_path Dir["#{$dir_packages}/lunar-console-*.unitypackage"].first
 
   # Merge changes to master
   Git.git_merge $dir_repo, $git_branch, 'master'
