@@ -3,15 +3,25 @@ require 'fileutils'
 require_relative 'common'
 require_relative 'git'
 require_relative 'credentials'
+require_relative 'unity_project'
 
 task :init do
+
+  $bin_release_unity = resolve_path '/Applications/Unity5/Unity.app/Contents/MacOS/Unity'
 
   $git_repo = 'git@github.com:SpaceMadness/lunar-unity-console.git'
   $git_branch = 'develop'
 
+  $git_repo_publisher = 'git@github.com:SpaceMadness/lunar-unity-console-publisher.git'
+  $git_branch_publisher = 'master'
+
   $dir_temp = File.expand_path 'temp'
   $dir_packages = "#{$dir_temp}/packages"
+  $dir_publisher = "#{$dir_temp}/publisher"
+  $dir_samples = "#{$dir_temp}/samples"
   $dir_repo = "#{$dir_temp}/repo"
+
+  $dir_test_project = File.expand_path 'TestProject'
 
   $dir_repo_project = "#{$dir_repo}/Project"
   $dir_repo_project_plugin = "#{$dir_repo_project}/Assets/LunarConsole"
@@ -74,9 +84,8 @@ task :fix_projects => [:init, :resolve_version] do
 
 end
 
-
-desc 'Build package'
-task :build_package => [:clean, :clone_repo, :fix_projects] do
+desc 'Build package on existing source'
+task :build_package_no_clean => [:init] do
 
   # call internal builder
   dir_builder = resolve_path "#{$dir_repo}/Builder"
@@ -91,6 +100,79 @@ task :build_package => [:clean, :clone_repo, :fix_projects] do
   FileUtils.makedirs $dir_packages
 
   FileUtils.cp file_package, "#{$dir_packages}/"
+
+end
+
+desc 'Build package'
+task :build_package => [:clean, :clone_repo, :fix_projects, :build_package_no_clean] do
+end
+
+desc 'Clean up test project'
+task :clean_test_project => [:init] do
+
+  print_header 'Clean up project...'
+  Dir.chdir $dir_test_project do
+    exec_shell 'git clean -x -f -d', "Can't clean project"
+  end
+  exec_shell "git checkout -- \"#{$dir_test_project}\"", "Can't reset project"
+
+end
+
+desc 'Prepare test project'
+task :prepare_test_project => [:clean_test_project] do
+
+  file_package = resolve_path Dir["#{$dir_packages}/lunar-console-*.unitypackage"].first
+
+  project = UnityProject.new $dir_test_project
+
+  print_header 'Importing package...'
+  project.import_package file_package
+
+  print_header 'Integrating package...'
+  project.exec_unity_method 'LunarConsoleBuilder.Builder.IntegratePlugin'
+
+  print_header 'Enabling package...'
+  project.exec_unity_method 'LunarConsoleInternal.Installer.EnablePlugin'
+
+  print_header 'Exporting apps...'
+  project.exec_unity_method 'LunarConsoleBuilder.Builder.BuildAll'
+
+end
+
+desc 'Builds test project'
+task :build_test_project => [:build_package, :prepare_test_project] do
+
+  ios_app = build_ios_app "#{$dir_test_project}/Build/iOS", 'Unity-iPhone', 'Release', 'Unity-iPhone'
+  fail_script_unless_file_exists ios_app
+
+  FileUtils.rm_rf $dir_samples
+  FileUtils.mkpath $dir_samples
+
+  FileUtils.cp_r ios_app, "#{$dir_samples}/"
+
+end
+
+desc 'Prepares publisher project'
+task :prepare_publisher_project => [:build_package] do
+
+  package = resolve_path Dir["#{$dir_packages}/lunar-console-*.unitypackage"].first
+
+  print_header 'Cloning publisher project...'
+  Git.clone $git_repo_publisher, $git_branch_publisher, $dir_publisher
+
+  print_header 'Preparing publisher project...'
+
+  # import plugin package
+  project = UnityProject.new $dir_publisher, $bin_release_unity
+  project.import_package package
+
+  # copy readme
+  readme_src = resolve_path 'package_readme.txt'
+  readme_dst = "#{$dir_publisher}/Assets/LunarConsole/readme.txt"
+
+  FileUtils.cp readme_src, readme_dst
+
+  project.open
 
 end
 
@@ -116,7 +198,7 @@ def github_create_release(dir_repo, version, package_zip)
 
   Dir.chdir dir_repo do
 
-    name = "SDK v#{version}"
+    name = "Lunar Console v#{version}"
     tag = version
 
     repo_name = git_get_repo_name '.'
@@ -132,8 +214,7 @@ def github_create_release(dir_repo, version, package_zip)
     exec_shell cmd, "Can't remove old release", :dont_fail_on_error => true
 
     # create a release
-    release_notes_strings = [ 'Created by buildsystem'] # FIXME!
-    release_notes = release_notes_strings.join('')
+    release_notes = get_release_notes dir_repo, version
 
     cmd  = %("#{github_release_bin}" release)
     cmd << %( -s #{$github_access_token})
@@ -166,34 +247,6 @@ def git_get_repo_name(dir_repo)
     file_config = '.git/config'
     config = File.read file_config
     return extract_regex config, %r#url = git@github\.com:.*?/(.*?).git#
-  end
-end
-
-############################################################
-
-def get_release_notes(dir_repo, version)
-  Dir.chdir dir_repo do
-    file_release_notes = 'CHANGELOG.md'
-    fail_script_unless_file_exists file_release_notes
-
-    lines = File.readlines file_release_notes
-    notes = []
-
-    block_found = false
-    lines.each { |line|
-
-      if (block_found)
-        if (line.start_with? '*')
-          notes.push line
-        elsif line.start_with? '##'
-          break
-        end
-      elsif line.start_with? "## v#{version}"
-        block_found = true
-      end
-    }
-
-    return notes
   end
 end
 

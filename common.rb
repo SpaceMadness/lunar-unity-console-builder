@@ -50,6 +50,36 @@ end
 
 ############################################################
 
+def build_ios_app(proj_dir, proj_name, configuration, target, export_path = nil)
+  fail_script_unless_file_exists proj_dir
+
+  Dir.chdir(proj_dir) do
+    dir_build = 'build'
+    sdk_name = 'iphoneos'
+
+    # cleanup
+    FileUtils.rm_rf(dir_build)
+
+    # build
+    cmd = %(xcodebuild -project "#{proj_name}.xcodeproj" -configuration "#{configuration}" -target "#{target}" -sdk #{sdk_name})
+    exec_shell(cmd, "Can't build ios app")
+
+    # result file
+    export_path = "build/#{configuration}-#{sdk_name}" if export_path.nil?
+
+    Dir.chdir export_path do
+      app_files = Dir['*.app']
+      fail_script_unless app_files.length == 1, "Unexpected apps count: #{app_files.join(',')}"
+      app_file = app_files.first
+
+      return File.expand_path app_file
+    end
+
+  end
+end
+
+############################################################
+
 # execute shell command and raise exception if fails
 def exec_shell(command, error_message, options = {})
   puts "Running command: #{command}" unless options[:silent] == true
@@ -131,4 +161,23 @@ def fix_copyright(file, header)
   end
 
   return false
+end
+
+def get_release_notes(dir_repo, version)
+
+  header = "## v.#{version}"
+
+  file_release_notes = resolve_path "#{dir_repo}/CHANGELOG.md"
+
+  text = File.read file_release_notes
+
+  start_index = text.index header
+  fail_script_unless start_index, "Can't find version number entry"
+
+  end_index = text.index /## v\.\d+\.\d+\.\d+/, start_index + header.length
+  fail_script_unless end_index, "Can't find end of the entry"
+
+  notes = text[start_index, end_index - start_index].strip!
+  notes.gsub! '"', '\\"'
+
 end
