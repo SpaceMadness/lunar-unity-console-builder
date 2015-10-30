@@ -146,13 +146,14 @@ namespace :builder do
   desc 'Builds test project'
   task :build_test_project => [:build_package, :prepare_test_project] do
 
-    ios_app = build_ios_app "#{$builder_dir_test_project}/Build/iOS", 'Unity-iPhone', 'Release', 'Unity-iPhone'
-    fail_script_unless_file_exists ios_app
+    ios_app = resolve_path build_ios_app("#{$builder_dir_test_project}/Build/iOS", 'Unity-iPhone', 'Release', 'Unity-iPhone')
+    android_app = resolve_path Dir["#{$builder_dir_test_project}/Build/Android/*.apk"].first
 
     FileUtils.rm_rf $builder_dir_samples
     FileUtils.mkpath $builder_dir_samples
 
     FileUtils.cp_r ios_app, "#{$builder_dir_samples}/"
+    FileUtils.cp_r android_app, "#{$builder_dir_samples}/"
 
   end
 

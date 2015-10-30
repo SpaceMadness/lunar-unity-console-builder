@@ -8,18 +8,27 @@ namespace LunarConsoleBuilder
 {
     static partial class Builder
     {
+        private static readonly string SCENE_PATH = "Assets/Scene.unity";
+
+        [MenuItem("Window/Lunar Mobile Console/Build/Integrate")]
         static void IntegratePlugin()
         {
+            bool opened = EditorApplication.OpenScene(SCENE_PATH);
+            if (!opened)
+            {
+                throw new Exception("Can't open scene: " + SCENE_PATH);
+            }
+
             bool succeed = EditorApplication.ExecuteMenuItem("Window/Lunar Mobile Console/Install...");
             if (!succeed)
             {
                 throw new Exception("Can't integrate plugin");
             }
 
-            bool saved = EditorApplication.SaveScene();
+            bool saved = EditorApplication.SaveScene(SCENE_PATH);
             if (!saved)
             {
-                throw new Exception("Scene not saved");
+                throw new Exception("Can't save scene: " + SCENE_PATH);
             }
         }
     }
