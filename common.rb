@@ -182,6 +182,8 @@ module Builder
     notes = text[start_index, end_index - start_index].strip!
     notes.gsub! '"', '\\"'
 
+    return notes
+
   end
 
 end
