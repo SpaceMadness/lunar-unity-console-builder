@@ -171,15 +171,32 @@ module Builder
 
     file_release_notes = resolve_path "#{dir_repo}/CHANGELOG.md"
 
-    text = File.read file_release_notes
+    lines = File.readlines file_release_notes
 
-    start_index = text.index header
-    fail_script_unless start_index, "Can't find version number entry"
+    start_index = -1
+    end_index = -1
 
-    end_index = text.index /## v\.\d+\.\d+\.\d+/, start_index + header.length
-    fail_script_unless end_index, "Can't find end of the entry"
+    (0 .. lines.length - 1).each do |index|
+      line = lines[index]
+      if line.include? header
+        start_index = index + 1
+        break
+      end
+    end
 
-    notes = text[start_index, end_index - start_index].strip!
+    (start_index + 1 .. lines.length - 1).each do |index|
+      line = lines[index]
+      if line =~ /## v\.\d+\.\d+\.\d+/
+        end_index = index - 1
+        break
+      end
+    end
+
+
+    fail_script_unless start_index != -1 && end_index != -1, "Can't extract release notes"
+
+    notes = lines[start_index..end_index].join
+    notes.strip!
     notes.gsub! '"', '\\"'
 
     return notes
