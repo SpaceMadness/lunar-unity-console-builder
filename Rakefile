@@ -138,13 +138,15 @@ namespace :builder do
     print_header 'Enabling package...'
     project.exec_unity_method 'LunarConsoleInternal.Installer.EnablePlugin'
 
-    print_header 'Exporting apps...'
-    project.exec_unity_method 'LunarConsoleBuilder.Builder.BuildAll'
-
   end
 
   desc 'Builds test project'
   task :build_test_project => [:build_package, :prepare_test_project] do
+
+    project = UnityProject.new $builder_dir_test_project
+
+    print_header 'Exporting apps...'
+    project.exec_unity_method 'LunarConsoleBuilder.Builder.BuildAll'
 
     ios_app = resolve_path build_ios_app("#{$builder_dir_test_project}/Build/iOS", 'Unity-iPhone', 'Release', 'Unity-iPhone')
     android_app = resolve_path Dir["#{$builder_dir_test_project}/Build/Android/*.apk"].first
