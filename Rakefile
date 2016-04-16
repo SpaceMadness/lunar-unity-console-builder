@@ -136,7 +136,7 @@ namespace :builder do
     project.exec_unity_method 'LunarConsoleBuilder.Builder.IntegratePlugin'
 
     print_header 'Enabling package...'
-    project.exec_unity_method 'LunarConsoleInternal.Installer.EnablePlugin'
+    project.exec_unity_method 'LunarConsolePluginInternal.Installer.EnablePlugin'
 
   end
 
