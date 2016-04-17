@@ -1,12 +1,32 @@
 ﻿using UnityEngine;
+using UnityEngine.UI;
 
 using System;
 using System.Collections;
 
+using LunarConsolePlugin;
+
 public class Logger : MonoBehaviour
 {
+    [SerializeField]
+    Text statusText;
+
     bool logging;
     int nextMessageIndex;
+    int consoleOpenCount;
+    int consoleCloseCount;
+
+    void Start()
+    {
+        LunarConsole.onConsoleOpened += delegate() {
+            ++consoleOpenCount;
+            UpdateStatusText();
+        };
+        LunarConsole.onConsoleClosed += delegate() {
+            ++consoleCloseCount;
+            UpdateStatusText();
+        };
+    }
 
     public void StartLogger()
     {
@@ -15,6 +35,11 @@ public class Logger : MonoBehaviour
         {
             StartCoroutine(LogMessages());
         }
+    }
+
+    public void ShowConsole()
+    {
+        LunarConsole.Show();
     }
 
     IEnumerator LogMessages()
@@ -45,4 +70,14 @@ public class Logger : MonoBehaviour
     {
         throw new Exception("Test exception");
     }
+
+    #region Status text
+
+    void UpdateStatusText()
+    {
+        statusText.text = "Open count: " + consoleOpenCount + "\n" +
+                          "Close count: " + consoleCloseCount;
+    }
+
+    #endregion
 }

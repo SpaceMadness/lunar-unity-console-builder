@@ -8,7 +8,7 @@ namespace LunarConsoleBuilder
 {
     static partial class Builder
     {
-        private static readonly string SCENE_PATH = "Assets/Scene.unity";
+        private static readonly string SCENE_PATH = "Assets/Scenes/Scene.unity";
 
         [MenuItem("Window/Lunar Mobile Console/Build/Integrate")]
         static void IntegratePlugin()
