@@ -1210,7 +1210,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Start Log
+  m_Text: Show Console
 --- !u!222 &1935034050
 CanvasRenderer:
   m_ObjectHideFlags: 0

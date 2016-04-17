@@ -4,8 +4,6 @@ using UnityEngine.UI;
 using System;
 using System.Collections;
 
-using LunarConsolePlugin;
-
 public class Logger : MonoBehaviour
 {
     [SerializeField]
@@ -18,14 +16,16 @@ public class Logger : MonoBehaviour
 
     void Start()
     {
-        LunarConsole.onConsoleOpened += delegate() {
+        #if LUNAR_CONSOLE_INTEGRATED
+        LunarConsolePlugin.LunarConsole.onConsoleOpened += delegate() {
             ++consoleOpenCount;
             UpdateStatusText();
         };
-        LunarConsole.onConsoleClosed += delegate() {
+        LunarConsolePlugin.LunarConsole.onConsoleClosed += delegate() {
             ++consoleCloseCount;
             UpdateStatusText();
         };
+        #endif // LUNAR_CONSOLE_INTEGRATED
     }
 
     public void StartLogger()
@@ -39,7 +39,9 @@ public class Logger : MonoBehaviour
 
     public void ShowConsole()
     {
-        LunarConsole.Show();
+        #if LUNAR_CONSOLE_INTEGRATED
+        LunarConsolePlugin.LunarConsole.Show();
+        #endif // LUNAR_CONSOLE_INTEGRATED
     }
 
     IEnumerator LogMessages()

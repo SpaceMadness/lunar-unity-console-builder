@@ -13,6 +13,8 @@ namespace LunarConsoleBuilder
         [MenuItem("Window/Lunar Mobile Console/Build/Integrate")]
         static void IntegratePlugin()
         {
+            SetScriptingDefineSymbolsForGroup("LUNAR_CONSOLE_INTEGRATED");
+
             bool opened = EditorApplication.OpenScene(SCENE_PATH);
             if (!opened)
             {
@@ -29,6 +31,19 @@ namespace LunarConsoleBuilder
             if (!saved)
             {
                 throw new Exception("Can't save scene: " + SCENE_PATH);
+            }
+        }
+
+        static void SetScriptingDefineSymbolsForGroup(string defines)
+        {
+            BuildTargetGroup[] groups = {
+                BuildTargetGroup.Android,
+                BuildTargetGroup.iOS,
+                BuildTargetGroup.Standalone
+            };
+            foreach (BuildTargetGroup group in groups)
+            {
+                PlayerSettings.SetScriptingDefineSymbolsForGroup(group, defines);
             }
         }
     }
