@@ -192,7 +192,7 @@ namespace :builder do
     Git.git_merge $builder_dir_repo, $builder_git_branch, 'master'
 
     # Create release
-    github_create_release $builder_dir_repo, $package_version, file_package
+    # github_create_release $builder_dir_repo, $package_version, file_package
 
   end
 
