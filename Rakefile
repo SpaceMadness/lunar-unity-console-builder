@@ -192,7 +192,7 @@ namespace :builder do
     Git.git_merge $builder_dir_repo, $builder_git_branch, 'master'
 
     # Create release
-    # github_create_release $builder_dir_repo, $package_version, file_package
+    github_create_release $builder_dir_repo, $package_version, file_package
 
   end
 
@@ -234,15 +234,15 @@ namespace :builder do
       exec_shell cmd, "Can't push release"
 
       # uploading package
-      cmd  = %("#{github_release_bin}" upload)
-      cmd << %( -s #{$github_access_token})
-      cmd << %( -u #{$github_owner})
-      cmd << %( -r #{repo_name})
-      cmd << %( -t "#{tag}")
-      cmd << %( -n "#{File.basename(package_zip)}")
-      cmd << %( -f "#{File.expand_path(package_zip)}")
-
-      exec_shell cmd, "Can't upload package asset"
+      # cmd  = %("#{github_release_bin}" upload)
+      # cmd << %( -s #{$github_access_token})
+      # cmd << %( -u #{$github_owner})
+      # cmd << %( -r #{repo_name})
+      # cmd << %( -t "#{tag}")
+      # cmd << %( -n "#{File.basename(package_zip)}")
+      # cmd << %( -f "#{File.expand_path(package_zip)}")
+      #
+      # exec_shell cmd, "Can't upload package asset"
 
     end
   end
