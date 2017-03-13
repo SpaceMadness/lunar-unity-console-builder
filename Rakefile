@@ -36,9 +36,15 @@ namespace :builder do
   end
 
   task :clean => [:init] do
-
     FileUtils.rmtree $builder_dir_temp
+  end
 
+  task :free  do
+    $plugin_configuration = 'free'
+  end
+
+  task :full  do
+    $plugin_configuration = 'full'
   end
 
   task :clone_repo => [:init] do
@@ -96,7 +102,7 @@ namespace :builder do
 
     Dir.chdir dir_builder do
       load File.expand_path 'Rakefile'
-      Rake::Task['lunar:export_unity_package'].invoke
+      Rake::Task["lunar:export_unity_package_#{$plugin_configuration}"].invoke
     end
 
     file_package = resolve_path Dir["#{$builder_dir_repo}/Builder/temp/packages/lunar-console-*.unitypackage"].first
@@ -107,9 +113,7 @@ namespace :builder do
 
   end
 
-  desc 'Build package'
-  task :build_package => [:clean, :clone_repo, :fix_projects, :build_package_no_clean] do
-  end
+  task :build_package => [:clean, :clone_repo, :fix_projects, :build_package_no_clean]
 
   desc 'Clean up test project'
   task :clean_test_project => [:init] do
@@ -159,7 +163,6 @@ namespace :builder do
 
   end
 
-  desc 'Prepares publisher project'
   task :prepare_publisher_project => [:build_package] do
 
     package = resolve_path Dir["#{$builder_dir_packages}/lunar-console-*.unitypackage"].first
@@ -183,8 +186,14 @@ namespace :builder do
 
   end
 
+  desc 'Prepares publisher project for FREE release'
+  task :prepare_publisher_project_free => [:free, :prepare_publisher_project]
+
+  desc 'Prepares publisher project for FULL release'
+  task :prepare_publisher_project_full => [:full, :prepare_publisher_project]
+
   desc 'Release package'
-  task :release_package => [:build_package] do
+  task :release_package => [:free, :build_package] do
 
     file_package = resolve_path Dir["#{$builder_dir_packages}/lunar-console-*.unitypackage"].first
 
