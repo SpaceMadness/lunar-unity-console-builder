@@ -198,6 +198,7 @@ module Builder
     notes = lines[start_index..end_index].join
     notes.strip!
     notes.gsub! '"', '\\"'
+    notes.gsub! '``', '\\`'
 
     return notes
 
