@@ -1,7 +1,8 @@
 require 'fileutils'
 
 require_relative 'common'
-require_relative 'git'
+require_relative 'git_hub'
+require_relative 'git_repo'
 require_relative 'credentials'
 require_relative 'unity_project'
 
@@ -13,10 +14,10 @@ namespace :builder do
 
     $builder_bin_release_unity = resolve_path '/Applications/Unity5/Unity.app/Contents/MacOS/Unity'
 
-    $builder_git_repo = 'git@github.com:SpaceMadness/lunar-unity-console.git'
+    $builder_git_repo = 'https://github.com/SpaceMadness/lunar-unity-console.git'
     $builder_git_branch = 'develop'
 
-    $builder_git_repo_publisher = 'git@github.com:SpaceMadness/lunar-unity-console-publisher.git'
+    $builder_git_repo_publisher = 'https://github.com/SpaceMadness/lunar-unity-console-publisher.git'
     $builder_git_branch_publisher = 'master'
 
     $builder_dir_temp = File.expand_path 'temp'
@@ -53,7 +54,7 @@ namespace :builder do
     FileUtils.rmtree $builder_dir_repo
 
     # clone
-    Git.clone $builder_git_repo, $builder_git_branch, $builder_dir_repo
+    GitRepo.clone $builder_git_repo, $builder_git_branch, $builder_dir_repo
   end
 
   task :resolve_version => [:init] do
@@ -168,7 +169,7 @@ namespace :builder do
     package = resolve_path Dir["#{$builder_dir_packages}/lunar-console-*.unitypackage"].first
 
     print_header 'Cloning publisher project...'
-    Git.clone $builder_git_repo_publisher, $builder_git_branch_publisher, $builder_dir_publisher
+    GitRepo.clone $builder_git_repo_publisher, $builder_git_branch_publisher, $builder_dir_publisher
 
     print_header 'Preparing publisher project...'
 
@@ -198,7 +199,7 @@ namespace :builder do
     file_package = resolve_path Dir["#{$builder_dir_packages}/lunar-console-*.unitypackage"].first
 
     # Merge changes to master
-    Git.git_merge $builder_dir_repo, $builder_git_branch, 'master'
+    GitRepo.git_merge $builder_dir_repo, $builder_git_branch, 'master'
 
     # Create release
     github_create_release $builder_dir_repo, $package_version, file_package
@@ -210,50 +211,21 @@ namespace :builder do
     fail_script_unless_file_exists dir_repo
     fail_script_unless_file_exists package_zip
 
-    github_release_bin = resolve_path "#{$builder_dir_tools}/github/github-release"
+    # extracting changelog
+    release_notes = get_release_notes dir_repo, @version
 
-    Dir.chdir dir_repo do
+    # preparing release commit
+    repo = GitRepo.new dir_repo
+    release_name = "Lunar Console v#{version}"
 
-      name = "Lunar Console v#{version}"
-      tag = version
+    release_tag = version
+    print_header 'Creating release tag...'
+    repo.tag release_tag
+    repo.push 'master', tags: true
 
-      repo_name = git_get_repo_name '.'
-      fail_script_unless repo_name, "Unable to extract repo name: #{dir_repo}"
-
-      # delete old release
-      cmd  = %("#{github_release_bin}" delete)
-      cmd << %( -s #{$github_access_token})
-      cmd << %( -u #{$github_owner})
-      cmd << %( -r #{repo_name})
-      cmd << %( -t "#{tag}")
-
-      exec_shell cmd, "Can't remove old release", :dont_fail_on_error => true
-
-      # create a release
-      release_notes = get_release_notes dir_repo, version
-
-      cmd  = %("#{github_release_bin}" release)
-      cmd << %( -s #{$github_access_token})
-      cmd << %( -u #{$github_owner})
-      cmd << %( -r #{repo_name})
-      cmd << %( -t "#{tag}")
-      cmd << %( -n "#{name}")
-      cmd << %( -d "#{release_notes}")
-
-      exec_shell cmd, "Can't push release"
-
-      # uploading package
-      cmd  = %("#{github_release_bin}" upload)
-      cmd << %( -s #{$github_access_token})
-      cmd << %( -u #{$github_owner})
-      cmd << %( -r #{repo_name})
-      cmd << %( -t "#{tag}")
-      cmd << %( -n "#{File.basename(package_zip)}")
-      cmd << %( -f "#{File.expand_path(package_zip)}")
-
-      exec_shell cmd, "Can't upload package asset"
-
-    end
+    # creating pull request
+    print_header 'Creating draft GitHub release...'
+    GitHub.create_release dir_repo, release_tag, release_name, release_notes, File.expand_path(package_zip)
   end
 
   ############################################################

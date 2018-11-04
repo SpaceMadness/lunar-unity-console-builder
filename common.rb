@@ -1,9 +1,15 @@
 require_relative 'tools/copyrighter/copyright'
 
+require 'colorize'
+
 module Builder
 
-  # check condition and raise exception
+  # prints header
   def print_header(message)
+    puts message.blue
+  end
+
+  def print_progress(message)
     puts message
   end
 
@@ -12,6 +18,13 @@ module Builder
   # check condition and raise exception
   def fail_script(message)
     raise "Build failed! #{message}"
+  end
+
+  ############################################################
+
+  # check condition and raise exception
+  def fail_script_if(condition, message)
+    fail_script message if condition
   end
 
   ############################################################
@@ -93,6 +106,14 @@ module Builder
     end
 
     return result
+  end
+
+  def delete_file(path)
+    if Dir.exist? path
+      FileUtils.rm_rf path
+    elsif File.exist? path
+      FileUtils.rm_f path
+    end
   end
 
   def list_files(dir, options = {})
