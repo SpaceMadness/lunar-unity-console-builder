@@ -1,4 +1,5 @@
 require_relative 'common.rb'
+require_relative 'platform'
 
 module Builder
 
@@ -6,7 +7,7 @@ module Builder
 
     attr_reader :dir_project
 
-    def initialize(dir_project, bin_unity = '/Applications/Unity/Unity.app/Contents/MacOS/Unity') # Windows support? Nah!
+    def initialize(dir_project, bin_unity)
       @dir_project = resolve_path File.expand_path(dir_project)
       @bin_unity   = resolve_path bin_unity
     end
@@ -26,7 +27,7 @@ module Builder
 
       exec_shell cmd, error_message.nil? ? "Can't execute method: #{method}\nProject: #{project}" : error_message
 
-      unity_log = File.expand_path '~/Library/Logs/Unity/Editor.log'
+      unity_log = File.expand_path Builder::Platform.unity_log
       fail_script_unless_file_exists unity_log
 
       result = File.read unity_log

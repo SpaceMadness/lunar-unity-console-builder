@@ -5,6 +5,7 @@ require_relative 'git_hub'
 require_relative 'git_repo'
 require_relative 'credentials'
 require_relative 'unity_project'
+require_relative 'platform'
 
 include Builder
 
@@ -12,7 +13,7 @@ namespace :builder do
 
   task :init do
 
-    $builder_bin_release_unity = resolve_path '/Applications/Unity5/Unity.app/Contents/MacOS/Unity'
+    $builder_publish_unity = resolve_path Platform.unity_publish
 
     $builder_git_repo = 'https://github.com/SpaceMadness/lunar-unity-console.git'
     $builder_git_branch = 'develop'
@@ -174,7 +175,7 @@ namespace :builder do
     print_header 'Preparing publisher project...'
 
     # import plugin package
-    project = UnityProject.new $builder_dir_publisher, $builder_bin_release_unity
+    project = UnityProject.new $builder_dir_publisher, $builder_publish_unity
     project.import_package package
 
     # copy readme
