@@ -90,7 +90,7 @@ namespace :builder do
                            )
 
       # push changes
-      Git.commit_and_push $builder_dir_repo, $builder_git_branch, files if files.length > 0
+      GitRepo.commit_and_push($builder_dir_repo, $builder_git_branch, "Updated copyrights", files) if files.length > 0
 
     end
 

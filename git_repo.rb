@@ -98,4 +98,11 @@ class GitRepo
       exec_shell("git push origin #{to_branch} --force", "Can't push branch to remote")
     end
   end
+
+  def self.commit_and_push(dir_repo, git_branch, message, files)
+    repo = GitRepo.new dir_repo
+    files.each { |file| repo.add_files file }
+    repo.commit message
+    repo.push(git_branch)
+  end
 end
