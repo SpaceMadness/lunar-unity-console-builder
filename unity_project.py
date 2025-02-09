@@ -37,7 +37,7 @@ class UnityProject:
             or f"Can't execute method: {method}\nProject: {project}",
         )
 
-        unity_log = os.path.expand_path(Builder.Platform.unity_log())
+        unity_log = os.path.expand_path(Builder.BuildPlatform.unity_log_path())
         self.fail_script_unless_file_exists(unity_log)
 
         with open(unity_log, "r") as f:

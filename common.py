@@ -4,191 +4,303 @@ import subprocess
 import time
 from pathlib import Path
 
+import re
+from typing import Optional
 
-class Builder:
 
-    # Prints header
-    def print_header(self, message):
-        print(f"\033[94m{message}\033[0m")
+# Prints header
+def print_header(message):
+    print(f"\033[94m{message}\033[0m")
 
-    def print_progress(self, message):
-        print(message)
 
-    ############################################################
+def print_progress(message):
+    print(message)
 
-    # Check condition and raise exception
-    def fail_script(self, message):
-        raise Exception(f"Build failed! {message}")
 
-    ############################################################
+############################################################
 
-    def fail_script_if(self, condition, message):
-        if condition:
-            self.fail_script(message)
+# Check condition and raise exception
+def fail_script(message):
+    raise Exception(f"Build failed! {message}")
 
-    ############################################################
 
-    def fail_script_unless(self, condition, message):
-        if not condition:
-            self.fail_script(message)
+############################################################
 
-    ############################################################
+def fail_script_if(condition, message):
+    if condition:
+        fail_script(message)
 
-    def fail_script_unless_file_exists(self, path):
-        if not path or not (os.path.isdir(path) or os.path.isfile(path)):
-            self.fail_script(f"File doesn't exist: '{path}'")
 
-    ############################################################
+############################################################
 
-    def not_nil(self, value):
-        self.fail_script_unless(value is not None, 'Value is nil')
-        return value
+def fail_script_unless(condition, message):
+    if not condition:
+        fail_script(message)
 
-    ############################################################
 
-    def extract_regex(self, text, pattern):
-        import re
-        match = re.search(pattern, text)
-        return match.group(1) if match else None
+############################################################
 
-    ############################################################
+def fail_script_unless_file_exists(path: str):
+    if not path or not Path(path).exists():
+        fail_script(f"File doesn't exist: '{path}'")
 
-    def resolve_path(self, path):
-        self.fail_script_unless_file_exists(path)
-        return path
 
-    ############################################################
+############################################################
 
-    def build_ios_app(self, proj_dir, proj_name, configuration, target, export_path=None):
-        self.fail_script_unless_file_exists(proj_dir)
+def not_nil(value):
+    fail_script_unless(value is not None, 'Value is nil')
+    return value
 
-        os.chdir(proj_dir)
-        dir_build = 'build'
-        sdk_name = 'iphoneos'
 
-        # Cleanup
-        shutil.rmtree(dir_build, ignore_errors=True)
+############################################################
 
-        # Build
-        cmd = [
-            'xcodebuild',
-            f'-project "{proj_name}.xcodeproj"',
-            f'-configuration "{configuration}"',
-            f'-target "{target}"',
-            f'-sdk {sdk_name}'
-        ]
-        self.exec_shell(" ".join(cmd), "Can't build ios app")
+def read_text(file_path: str) -> str:
+    """Reads the content of a file and returns it as a string."""
+    with open(file_path, 'r', encoding='utf-8') as file:
+        return file.read()
 
-        export_path = export_path or f"build/{configuration}-{sdk_name}"
 
-        os.chdir(export_path)
-        app_files = [file for file in os.listdir('.') if file.endswith('.app')]
-        self.fail_script_unless(len(app_files) == 1, f"Unexpected apps count: {', '.join(app_files)}")
-        return os.path.abspath(app_files[0])
+def write_text(file_path: str, content: str) -> None:
+    """Writes the given content string to a file."""
+    with open(file_path, 'w', encoding='utf-8') as file:
+        file.write(content)
 
-    ############################################################
 
-    def exec_shell(self, command, error_message, options=None):
-        if options is None:
-            options = {}
+def find_in_text(text: str, pattern: str) -> Optional[str]:
+    """Searches for the first occurrence of a regex pattern in the given text and returns the matching group."""
+    match = re.search(pattern, text)
+    if match:
+        return match.group(1)
+    return None
 
-        if not options.get('silent', False):
-            print(f"Running command: {command}")
 
-        result = subprocess.run(command, shell=True, text=True, capture_output=True)
+def find_in_file(file_path: str, pattern: str) -> Optional[str]:
+    """Reads a file and searches for the first occurrence of a regex pattern, returning the matching group."""
+    text = read_text(file_path)
+    return find_in_text(text, pattern)
 
-        if not options.get('dont_fail_on_error', False):
-            self.fail_script_unless(result.returncode == 0,
-                                    f"{error_message}\nShell failed: {command}\n{result.stderr}")
+
+def extract_regex(text, pattern) -> str:
+    import re
+    match = re.search(pattern, text)
+    return match.group(1) if match else None
+
+
+def join_path(*components) -> str:
+    """
+    Joins multiple path components together in a platform-independent way.
+    """
+    return os.path.join(*components)
+
+
+############################################################
+
+def resolve_path(path: str):
+    fail_script_unless_file_exists(path)
+    return path
+
+
+############################################################
+
+def build_ios_app(proj_dir, proj_name, configuration, target, export_path=None):
+    fail_script_unless_file_exists(proj_dir)
+
+    os.chdir(proj_dir)
+    dir_build = 'build'
+    sdk_name = 'iphoneos'
+
+    # Cleanup
+    shutil.rmtree(dir_build, ignore_errors=True)
+
+    # Build
+    cmd = [
+        'xcodebuild',
+        f'-project "{proj_name}.xcodeproj"',
+        f'-configuration "{configuration}"',
+        f'-target "{target}"',
+        f'-sdk {sdk_name}'
+    ]
+    exec_shell(" ".join(cmd), "Can't build ios app")
+
+    export_path = export_path or f"build/{configuration}-{sdk_name}"
+
+    os.chdir(export_path)
+    app_files = [file for file in os.listdir('.') if file.endswith('.app')]
+    fail_script_unless(len(app_files) == 1, f"Unexpected apps count: {', '.join(app_files)}")
+    return os.path.abspath(app_files[0])
+
+
+############################################################
+
+def exec_shell(command, error_message=None, **kwargs) -> str:
+    """
+    Execute a shell command and handle the result.
+
+    Args:
+        command: The shell command to execute
+        error_message: Error message to display if command fails
+        **kwargs: Additional arguments:
+            silent (bool): If True, suppress command output
+            dont_fail_on_error (bool): If True, don't raise error on non-zero exit code
+
+    Returns:
+        str: Command stdout output
+
+    Raises:
+        RuntimeError: If command fails and dont_fail_on_error is False
+    """
+    if not kwargs.get('silent', False):
+        print(f"Running command: {command}")
+
+    result = subprocess.run(command,
+                            shell=True,
+                            text=True,
+                            capture_output=True,
+                            cwd=kwargs.get("working_dir"))
+
+    if result.returncode != 0:
+        error = f"{error_message}\nShell failed: {command}\n{result.stderr}"
+        if not kwargs.get('dont_fail_on_error', False):
+            fail_script_unless(False, error)
         else:
-            if result.returncode != 0:
-                print(error_message)
+            print(error)
 
-        return result.stdout
+    return result.stdout
 
-    def delete_file(self, path):
-        if os.path.isdir(path):
-            shutil.rmtree(path)
-        elif os.path.isfile(path):
-            os.remove(path)
 
-    def list_files(self, dir, options=None):
-        if options is None:
-            options = {}
+def delete_file(path):
+    if os.path.isdir(path):
+        shutil.rmtree(path)
+    elif os.path.isfile(path):
+        os.remove(path)
 
-        files = []
-        ignored_files = options.get('ignored_files', [])
-        types = options.get('types')
-        list_directories = options.get('list_directories', False)
 
-        for root, dirs, filenames in os.walk(dir):
-            if list_directories:
-                for d in dirs:
-                    if d not in ignored_files:
-                        files.append(os.path.join(root, d))
+def list_files(path, types, ignored_files, list_directories=False):
+    files = []
+    for root, dirs, filenames in os.walk(path):
+        if list_directories:
+            for d in dirs:
+                if d not in ignored_files:
+                    files.append(os.path.join(root, d))
 
-            for f in filenames:
-                if f not in ignored_files and (types is None or os.path.splitext(f)[1] in types):
-                    files.append(os.path.join(root, f))
+        for f in filenames:
+            if f not in ignored_files and (types is None or os.path.splitext(f)[1] in types):
+                files.append(os.path.join(root, f))
 
-        return files
+    return files
 
-    def fix_copyrights(self, dir_project, dir_headers, options=None):
-        if options is None:
-            options = {}
 
-        self.print_header('Fixing copyright...')
+def fix_copyrights(dir_project, dir_headers, **kwargs):
+    print_header('Fixing copyright...')
 
-        file_header = self.resolve_path(f"{dir_headers}/copyright.txt")
-        with open(file_header, 'r') as f:
-            copyright_header = f.read()
+    file_header = resolve_path(f"{dir_headers}/copyright.txt")
+    copyright_header = read_text(file_header)
 
-        files = self.list_files(dir_project, options)
-        modified_files = []
+    files = list_files(dir_project,
+                       types=kwargs.get('types'),
+                       ignored_files=kwargs.get('ignored_files', []),
+                       list_directories=kwargs.get('list_directories', False))
 
-        for file in files:
-            if self.fix_copyright(file, copyright_header):
-                modified_files.append(file)
+    return [file for file in files if _fix_copyright(file, copyright_header)]
 
-        return modified_files
 
-    def fix_copyright(self, file, header):
-        with open(file, 'r') as f:
-            old_source = f.read()
+def _fix_copyright(file, header):
+    """Updates copyright header in a file if needed.
+    
+    Args:
+        file: Path to the source file
+        header: Copyright header template string
+    
+    Returns:
+        bool: True if file was modified, False otherwise
+    """
+    old_source = read_text(file)
+    source_no_header = remove_header_comment(old_source)
 
-        source_no_header = self.remove_header_comment(old_source)
+    # Get file info
+    filename = os.path.basename(file)
+    name, _ = os.path.splitext(filename)
+    current_year = str(time.localtime().tm_year)
 
-        header = header.replace("{{date.year}}", str(time.localtime().tm_year))
-        header = header.replace("{{file.name.ext}}", os.path.basename(file))
-        header = header.replace("{{file.name}}", os.path.splitext(os.path.basename(file))[0])
+    # Format header template
+    header = header.replace("{{date.year}}", current_year)
+    header = header.replace("{{file.name.ext}}", filename)
+    header = header.replace("{{file.name}}", name)
 
-        new_source = header + '\n\n' + source_no_header
+    new_source = f"{header}\n\n{source_no_header}"
 
-        if new_source != old_source:
-            with open(file, 'w') as f:
-                f.write(new_source)
-            return True
-
+    if new_source == old_source:
         return False
 
-    def get_release_notes(self, dir_repo, version):
-        header = f"## v.{version}"
-        file_release_notes = self.resolve_path(f"{dir_repo}/CHANGELOG.md")
+    write_text(file, new_source)
+    return True
 
-        with open(file_release_notes, 'r') as f:
-            lines = f.readlines()
 
-        start_index = next((i for i, line in enumerate(lines) if header in line), -1)
-        end_index = next(
-            (i for i, line in enumerate(lines[start_index + 1:], start=start_index + 1) if "## v." in line), len(lines))
+def get_release_notes(dir_repo, version):
+    header = f"## v.{version}"
+    file_release_notes = resolve_path(f"{dir_repo}/CHANGELOG.md")
 
-        self.fail_script_unless(start_index != -1 and end_index != -1, "Can't extract release notes")
+    with open(file_release_notes, 'r') as f:
+        lines = f.readlines()
 
-        notes = ''.join(lines[start_index + 1:end_index]).strip()
-        notes = notes.replace('"', '\\"').replace('``', '\\`')
-        return notes
+    start_index = next((i for i, line in enumerate(lines) if header in line), -1)
+    end_index = next(
+        (i for i, line in enumerate(lines[start_index + 1:], start=start_index + 1) if "## v." in line), len(lines))
 
-    @staticmethod
-    def remove_header_comment(source):
-        # Placeholder for actual implementation
+    fail_script_unless(start_index != -1 and end_index != -1, "Can't extract release notes")
+
+    notes = ''.join(lines[start_index + 1:end_index]).strip()
+    notes = notes.replace('"', '\\"').replace('``', '\\`')
+    return notes
+
+
+def remove_header_comment(source: str) -> str:
+    """Removes header comments from source code.
+    
+    Handles different comment styles:
+    - // Single line comments (C-style)
+    - # Single line comments (Python/Shell-style)
+    - /* */ Multi-line comments (C-style)
+    - ''' ''' Multi-line comments (Python-style)
+    - \"\"\" \"\"\" Multi-line comments (Python-style)
+    
+    Args:
+        source: Source code as string
+        
+    Returns:
+        Source code with header comments removed
+    """
+    # Skip leading whitespace
+    source = source.lstrip()
+    
+    # Handle empty source
+    if not source:
         return source
+        
+    # Handle single-line comments
+    lines = source.splitlines()
+    first_non_comment = 0
+    for i, line in enumerate(lines):
+        stripped = line.lstrip()
+        if not stripped:
+            continue
+        if not stripped.startswith(('//', '#', '/*', '<!--')):
+            first_non_comment = i
+            break
+    
+    # Handle multi-line comments
+    if first_non_comment == 0:
+        # C-style /* */ comments
+        if source.lstrip().startswith('/*'):
+            end = source.find('*/') 
+            if end != -1:
+                return source[end + 2:].lstrip()
+                
+        # Python-style triple quotes
+        for delimiter in ['"""', "'''"]:
+            if source.lstrip().startswith(delimiter):
+                end = source.find(delimiter, len(delimiter))
+                if end != -1:
+                    return source[end + 3:].lstrip()
+    
+    return '\n'.join(lines[first_non_comment:])

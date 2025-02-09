@@ -4,110 +4,109 @@ import shutil
 from invoke import task
 from pathlib import Path
 
-# Mock imports for required modules
-# These need to be implemented or replaced with the actual Python equivalents.
-from common import resolve_path, not_nil, print_header, exec_shell
-from git_hub import GitHub
+from common import resolve_path, not_nil, print_header, exec_shell, join_path, find_in_file, fix_copyrights
 from git_repo import GitRepo
 from unity_project import UnityProject
-from platform import Platform
+from build_platform import BuildPlatform
 
 @task
 def init(c):
-    global builder_vars
-    builder_vars = {
-        "publish_unity": resolve_path(Platform.unity_publish),
-        "git_repo": "https://github.com/SpaceMadness/lunar-unity-console.git",
-        "git_branch": "develop",
-        "git_repo_publisher": "https://github.com/SpaceMadness/lunar-unity-console-publisher.git",
-        "git_branch_publisher": "master",
-        "dir_temp": Path("temp").resolve(),
-        "dir_packages": Path("temp/packages").resolve(),
-        "dir_publisher": Path("temp/publisher").resolve(),
-        "dir_samples": Path("temp/samples").resolve(),
-        "dir_repo": Path("temp/repo").resolve(),
-        "dir_test_project": Path("TestProject").resolve(),
-        "dir_repo_project": Path("temp/repo/Project").resolve(),
-        "dir_repo_project_plugin": Path("temp/repo/Project/Assets/LunarConsole").resolve(),
-        "dir_tools": resolve_path("tools"),
-        "dir_tools_copyrighter": resolve_path("tools/copyrighter"),
-    }
+    # Store values directly in context instead of global dict
+    c.publish_unity = resolve_path(BuildPlatform.unity_publish_binary())
+    c.git_repo = "https://github.com/SpaceMadness/lunar-unity-console.git"
+    c.git_branch = "develop"
+    c.git_repo_publisher = "https://github.com/SpaceMadness/lunar-unity-console-publisher.git"
+    c.git_branch_publisher = "master"
+    c.dir_temp = Path("temp").resolve()
+    c.dir_packages = Path("temp/packages").resolve()
+    c.dir_publisher = Path("temp/publisher").resolve()
+    c.dir_samples = Path("temp/samples").resolve()
+    c.dir_repo = Path("temp/repo").resolve()
+    c.dir_test_project = Path("TestProject").resolve()
+    c.dir_repo_project = Path("temp/repo/Project").resolve()
+    c.dir_repo_project_plugin = Path("temp/repo/Project/Assets/LunarConsole").resolve()
+    c.dir_tools = resolve_path("tools")
+    c.dir_tools_copyrighter = resolve_path("tools/copyrighter")
 
 @task(init)
 def clean(c):
-    shutil.rmtree(builder_vars["dir_temp"], ignore_errors=True)
+    shutil.rmtree(c.dir_temp, ignore_errors=True)
 
 @task
-def free(c):
-    global plugin_configuration
-    plugin_configuration = "free"
+def _free(c):
+    c.plugin_configuration = "free"
 
 @task
-def full(c):
-    global plugin_configuration
-    plugin_configuration = "full"
+def _full(c):
+    c.plugin_configuration = "full"
 
 @task(init)
-def clone_repo(c):
-    shutil.rmtree(builder_vars["dir_repo"], ignore_errors=True)
-    GitRepo.clone(builder_vars["git_repo"], builder_vars["git_branch"], builder_vars["dir_repo"])
+def _clone_repo(c):
+    git_repo = not_nil(c.git_repo)
+    git_branch = not_nil(c.git_branch)
+    dir_repo = not_nil(c.dir_repo)
+    
+    shutil.rmtree(dir_repo, ignore_errors=True)
+
+    print_header(f"Cloning repository: {git_repo} ({git_branch})")
+    exec_shell(f"git clone --depth 1 --branch {git_branch} {git_repo} {dir_repo}", "Can't clone repository")
+
 
 @task(init)
-def resolve_version(c):
-    def extract_package_version(dir_project):
-        file_version = dir_project / "Scripts/Constants.cs"
-        source = file_version.read_text()
-        version = not_nil(source.split('Version = "', 1)[-1].split('"', 1)[0])
-        return version
+def _resolve_version(c):
+    def extract_package_version(path):
+        file_path = join_path(path, "Scripts", "Constants.cs")
+        return not_nil(find_in_file(file_path, pattern=r'Version = "([^"]+);"'))
 
-    builder_vars["package_version"] = extract_package_version(builder_vars["dir_repo_project_plugin"])
-    print_header(f"Package version: {builder_vars['package_version']}")
+    dir_project = resolve_path(c.dir_repo_project_plugin)
+    c.package_version = extract_package_version(dir_project)
+    print_header(f"Package version: {c.package_version}")
 
-@task(init, resolve_version)
-def fix_projects(c):
-    os.chdir(builder_vars["dir_repo"])
+@task(init, _resolve_version)
+def _fix_projects(c):
     files = []
 
     files.extend(
         fix_copyrights(
-            builder_vars["dir_repo"],
-            builder_vars["dir_tools_copyrighter"],
+            c.dir_repo,
+            c.dir_tools_copyrighter,
             types=[".cs", ".h", ".m", ".mm", ".c", ".cpp", ".java"],
             ignored_files=["Plist.cs", "XCodeEditor-for-Unity", "SimpleJSON.cs"]
         )
     )
 
     if files:
-        GitRepo.commit_and_push(builder_vars["dir_repo"], builder_vars["git_branch"], "Updated copyrights", files)
+        repo = GitRepo(c.dir_repo)
+        repo.add_files(files)
+        repo.commit("Updated copyrights")
+        repo.push(c.git_branch)
 
 @task(init)
 def build_package_no_clean(c):
-    dir_builder = builder_vars["dir_repo"] / "Builder"
-    os.chdir(dir_builder)
+    dir_builder = c.dir_repo / "Builder"
 
-    # Assuming Rake tasks are replaced with equivalent Python commands
-    invoke_task = f"lunar:export_unity_package_{plugin_configuration}"
-    exec_shell(f"invoke {invoke_task}")
+    invoke_task = f"export-unity-package-{c.plugin_configuration}"
+    exec_shell(f"invoke {invoke_task}", working_dir=dir_builder)
 
     file_package = next((dir_builder / "temp/packages").glob("lunar-console-*.unitypackage"), None)
-    builder_vars["dir_packages"].mkdir(parents=True, exist_ok=True)
-    shutil.copy(file_package, builder_vars["dir_packages"])
+    c.dir_packages.mkdir(parents=True, exist_ok=True)
+    shutil.copy(file_package, c.dir_packages)
 
-@task(clean, clone_repo, fix_projects, build_package_no_clean)
+@task(clean, _clone_repo, _fix_projects, build_package_no_clean)
 def build_package(c):
     pass
 
 @task(init)
 def clean_test_project(c):
     print_header("Clean up project...")
-    os.chdir(builder_vars["dir_test_project"])
+    os.chdir(c.dir_test_project)
     exec_shell('git clean -x -f -d', "Can't clean project")
-    exec_shell(f'git checkout -- "{builder_vars["dir_test_project"]}"', "Can't reset project")
+    exec_shell(f'git checkout -- "{c.dir_test_project}"', "Can't reset project")
 
 @task(clean_test_project)
 def prepare_test_project(c):
-    file_package = next(builder_vars["dir_packages"].glob("lunar-console-*.unitypackage"), None)
-    project = UnityProject(builder_vars["dir_test_project"])
+    file_package = next(c.dir_packages.glob("lunar-console-*.unitypackage"), None)
+    project = UnityProject(c.dir_test_project)
 
     print_header("Importing package...")
     project.import_package(file_package)
@@ -120,43 +119,43 @@ def prepare_test_project(c):
 
 @task(build_package, prepare_test_project)
 def build_test_project(c):
-    project = UnityProject(builder_vars["dir_test_project"])
+    project = UnityProject(c.dir_test_project)
 
     print_header("Exporting apps...")
     project.exec_unity_method("LunarConsoleBuilder.Builder.BuildAll")
 
-    ios_app = build_ios_app(builder_vars["dir_test_project"] / "Build/iOS", "Unity-iPhone", "Release", "Unity-iPhone")
-    android_app = next((builder_vars["dir_test_project"] / "Build/Android").glob("*.apk"), None)
+    ios_app = build_ios_app(c.dir_test_project / "Build/iOS", "Unity-iPhone", "Release", "Unity-iPhone")
+    android_app = next((c.dir_test_project / "Build/Android").glob("*.apk"), None)
 
-    builder_vars["dir_samples"].mkdir(parents=True, exist_ok=True)
-    shutil.copy(ios_app, builder_vars["dir_samples"])
-    shutil.copy(android_app, builder_vars["dir_samples"])
+    c.dir_samples.mkdir(parents=True, exist_ok=True)
+    shutil.copy(ios_app, c.dir_samples)
+    shutil.copy(android_app, c.dir_samples)
 
 @task(build_package)
 def prepare_publisher_project(c):
-    package = next(builder_vars["dir_packages"].glob("lunar-console-*.unitypackage"), None)
+    package = next(c.dir_packages.glob("lunar-console-*.unitypackage"), None)
 
     print_header("Cloning publisher project...")
-    GitRepo.clone(builder_vars["git_repo_publisher"], builder_vars["git_branch_publisher"], builder_vars["dir_publisher"])
+    GitRepo.clone(c.git_repo_publisher, c.git_branch_publisher, c.dir_publisher)
 
-    project = UnityProject(builder_vars["dir_publisher"], builder_vars["publish_unity"])
+    project = UnityProject(c.dir_publisher, c.publish_unity)
     project.import_package(package)
 
     readme_src = Path("package_readme.txt").resolve()
-    readme_dst = builder_vars["dir_publisher"] / "Assets/LunarConsole/readme.txt"
+    readme_dst = c.dir_publisher / "Assets/LunarConsole/readme.txt"
     shutil.copy(readme_src, readme_dst)
 
     project.open()
 
-@task(pre=[free, prepare_publisher_project])
-def prepare_publisher_project_free(c):
+@task(pre=[_free, prepare_publisher_project])
+def _prepare_publisher_project_free(c):
     print("Publisher project prepared for FREE release.")
 
-@task(pre=[full, prepare_publisher_project])
-def prepare_publisher_project_full(c):
+@task(pre=[_full, prepare_publisher_project])
+def _prepare_publisher_project_full(c):
     print("Publisher project prepared for FULL release.")
 
-@task(pre=[free])
+@task(pre=[_free])
 def release_package(c):
     print("Building package for release...")
     # Replace these variables with appropriate values

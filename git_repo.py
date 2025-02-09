@@ -1,7 +1,5 @@
 import os
 import shutil
-from git import Repo, GitCommandError
-
 
 class GitRepo:
     class Remote:

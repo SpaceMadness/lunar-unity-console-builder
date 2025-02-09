@@ -2,6 +2,8 @@ from github import Github, Repository
 import re
 import os
 
+from git_repo import GitRepo
+
 
 class GitHub:
     def __init__(self, access_token):
