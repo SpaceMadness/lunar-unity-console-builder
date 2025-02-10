@@ -190,7 +190,7 @@ def list_files(path, types, ignored_files, list_directories=False):
     return files
 
 
-def fix_copyrights(dir_project, dir_headers, **kwargs):
+def fix_copyrights(dir_project, dir_headers, **kwargs) -> list[str]:
     print_header('Fixing copyright...')
 
     file_header = resolve_path(f"{dir_headers}/copyright.txt")

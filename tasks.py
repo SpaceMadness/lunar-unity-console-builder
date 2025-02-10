@@ -5,9 +5,10 @@ from invoke import task
 from pathlib import Path
 
 from common import resolve_path, not_nil, print_header, exec_shell, join_path, find_in_file, fix_copyrights
-from git_repo import GitRepo
+from git_helpers import git_clone
 from unity_project import UnityProject
 from build_platform import BuildPlatform
+
 
 @task
 def init(c):
@@ -28,58 +29,57 @@ def init(c):
     c.dir_tools = resolve_path("tools")
     c.dir_tools_copyrighter = resolve_path("tools/copyrighter")
 
+
 @task(init)
 def clean(c):
-    shutil.rmtree(c.dir_temp, ignore_errors=True)
+    if c.dir_temp.exists():
+        print_header(f"Cleaning directory: {c.dir_temp}")
+        shutil.rmtree(c.dir_temp)
+
 
 @task
 def _free(c):
     c.plugin_configuration = "free"
 
+
 @task
 def _full(c):
     c.plugin_configuration = "full"
 
+
 @task(init)
 def _clone_repo(c):
-    git_repo = not_nil(c.git_repo)
-    git_branch = not_nil(c.git_branch)
-    dir_repo = not_nil(c.dir_repo)
-    
-    shutil.rmtree(dir_repo, ignore_errors=True)
-
-    print_header(f"Cloning repository: {git_repo} ({git_branch})")
-    exec_shell(f"git clone --depth 1 --branch {git_branch} {git_repo} {dir_repo}", "Can't clone repository")
+    git_clone(c.dir_repo, c.git_branch, c.git_repo)
 
 
 @task(init)
 def _resolve_version(c):
     def extract_package_version(path):
         file_path = join_path(path, "Scripts", "Constants.cs")
-        return not_nil(find_in_file(file_path, pattern=r'Version = "([^"]+);"'))
+        return not_nil(find_in_file(file_path, pattern=r'Version = "(\d+\.\d+\.\d+)";'))
 
     dir_project = resolve_path(c.dir_repo_project_plugin)
     c.package_version = extract_package_version(dir_project)
     print_header(f"Package version: {c.package_version}")
 
+
 @task(init, _resolve_version)
 def _fix_projects(c):
-    files = []
-
-    files.extend(
-        fix_copyrights(
-            c.dir_repo,
-            c.dir_tools_copyrighter,
-            types=[".cs", ".h", ".m", ".mm", ".c", ".cpp", ".java"],
-            ignored_files=["Plist.cs", "XCodeEditor-for-Unity", "SimpleJSON.cs"]
-        )
+    files = fix_copyrights(
+        c.dir_repo,
+        c.dir_tools_copyrighter,
+        types=[".cs", ".h", ".m", ".mm", ".c", ".cpp", ".java"],
+        ignored_files=["Plist.cs", "XCodeEditor-for-Unity", "SimpleJSON.cs"]
     )
 
     if files:
-        repo = GitRepo(c.dir_repo)
-        repo.add_files(files)
-        repo.commit("Updated copyrights")
-        repo.push(c.git_branch)
+        from git import Repo
+        repo = Repo(c.dir_repo)
+        repo.index.add([os.path.abspath(f) for f in files])
+        repo.index.commit("Updated copyrights")
+        origin = repo.remote('origin')
+        origin.push(c.git_branch)
+
 
 @task(init)
 def build_package_no_clean(c):
@@ -92,9 +92,12 @@ def build_package_no_clean(c):
     c.dir_packages.mkdir(parents=True, exist_ok=True)
     shutil.copy(file_package, c.dir_packages)
 
-@task(clean, _clone_repo, _fix_projects, build_package_no_clean)
-def build_package(c):
+
+# @task(clean, _clone_repo, _fix_projects, build_package_no_clean)
+@task(clean, _clone_repo, build_package_no_clean)
+def _build_package(c):
     pass
+
 
 @task(init)
 def clean_test_project(c):
@@ -103,8 +106,9 @@ def clean_test_project(c):
     exec_shell('git clean -x -f -d', "Can't clean project")
     exec_shell(f'git checkout -- "{c.dir_test_project}"', "Can't reset project")
 
+
 @task(clean_test_project)
-def prepare_test_project(c):
+def _prepare_test_project(c):
     file_package = next(c.dir_packages.glob("lunar-console-*.unitypackage"), None)
     project = UnityProject(c.dir_test_project)
 
@@ -117,7 +121,8 @@ def prepare_test_project(c):
     print_header("Enabling package...")
     project.exec_unity_method("LunarConsoleEditorInternal.Installer.EnablePlugin")
 
-@task(build_package, prepare_test_project)
+
+@task(_build_package, _prepare_test_project)
 def build_test_project(c):
     project = UnityProject(c.dir_test_project)
 
@@ -131,12 +136,13 @@ def build_test_project(c):
     shutil.copy(ios_app, c.dir_samples)
     shutil.copy(android_app, c.dir_samples)
 
-@task(build_package)
-def prepare_publisher_project(c):
-    package = next(c.dir_packages.glob("lunar-console-*.unitypackage"), None)
+
+@task(_build_package)
+def _prepare_publisher_project(c):
+    package = next(c.dir_packages.glob("lunar-console-*.unitypackage"), None).resolve()
 
     print_header("Cloning publisher project...")
-    GitRepo.clone(c.git_repo_publisher, c.git_branch_publisher, c.dir_publisher)
+    git_clone(git_repo=c.git_repo_publisher, git_branch=c.git_branch_publisher, dest_dir=c.dir_publisher)
 
     project = UnityProject(c.dir_publisher, c.publish_unity)
     project.import_package(package)
@@ -147,13 +153,16 @@ def prepare_publisher_project(c):
 
     project.open()
 
-@task(pre=[_free, prepare_publisher_project])
-def _prepare_publisher_project_free(c):
+
+@task(pre=[_free, _prepare_publisher_project])
+def prepare_publisher_project_free(c):
     print("Publisher project prepared for FREE release.")
 
-@task(pre=[_full, prepare_publisher_project])
-def _prepare_publisher_project_full(c):
+
+@task(pre=[_full, _prepare_publisher_project])
+def prepare_publisher_project_full(c):
     print("Publisher project prepared for FULL release.")
+
 
 @task(pre=[_free])
 def release_package(c):
